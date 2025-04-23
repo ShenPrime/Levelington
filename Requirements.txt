@@ -1,0 +1,35 @@
+Discord XP Bot Requirements:
+
+Core Features:
+1. Track user message activity in Discord channels
+2. Award XP points when users send messages
+3. Implement leveling system based on XP accumulation
+4. Display user levels and XP progress
+
+XP System:
+1. Award 15-25 XP per message (random amount)
+2. Implement 30-second cooldown between XP rewards per user
+3. Ignore bot commands and empty messages for XP calculation
+4. Store XP data persistently in a database
+
+Leveling System:
+1. Calculate level thresholds using formula: 100 * (level ^ 1.5)
+2. Automatically update user level when XP threshold is reached
+3. Send level-up notifications in designated channel
+
+Commands:
+1. /rank - Display current level and XP progress
+2. /leaderboard - Show top 10 users by XP
+3. /xp @user - Check another user's XP stats
+
+Technical Requirements:
+1. Use Discord.js library
+2. Implement database storage (postgres)
+4. Include error handling and logging
+5. Maintain code documentation
+
+Optional Features:
+1. Role rewards at specific level milestones
+2. Customizable XP gain rates per channel
+3. XP multiplier events
+4. Weekly/monthly leaderboard resets

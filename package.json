@@ -1,0 +1,20 @@
+{
+  "name": "xp-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node deploy-commands.js && node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
+    "nodemon": "^3.1.9",
+    "pg": "^8.15.1"
+  }
+}
