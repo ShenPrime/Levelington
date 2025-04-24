@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
 const db = require('../db');
 
 module.exports = {
@@ -16,8 +16,50 @@ module.exports = {
 				return interaction.reply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', ephemeral: true });
 			}
 
+			// Role management logic moved inside execute function
+			const roleName = 'Biggest Yapper';
+			let role = interaction.guild.roles.cache.find(r => r.name === roleName);
+			if (!role) {
+				role = await interaction.guild.roles.create({
+					name: roleName,
+					color: '#FFD700',
+					permissions: [PermissionsBitField.Flags.ViewChannel],
+					reason: 'Automatically created for XP leaderboard top user'
+				});
+			}
+
+			const settings = await db.getGuildSettings(guildId);
+			const previousTopUserId = settings?.top_user_id;
+			const hasClearLeader = topUsers.length > 1 
+				? topUsers[0].xp > topUsers[1].xp
+				: true;
+
+			if (hasClearLeader) {
+				const currentTopUser = topUsers[0];
+				
+				if (previousTopUserId) {
+					const previousMember = await interaction.guild.members.fetch(previousTopUserId).catch(() => null);
+					if (previousMember && previousMember.roles.cache.has(role.id)) {
+						await previousMember.roles.remove(role);
+					}
+				}
+				
+				const topMember = await interaction.guild.members.fetch(currentTopUser.user_id);
+				if (topMember) {
+					await topMember.roles.add(role);
+					await db.setGuildSetting(guildId, 'top_user_id', currentTopUser.user_id);
+				}
+			} else if (previousTopUserId) {
+				const previousMember = await interaction.guild.members.fetch(previousTopUserId).catch(() => null);
+				if (previousMember && previousMember.roles.cache.has(role.id)) {
+					await previousMember.roles.remove(role);
+					await db.setGuildSetting(guildId, 'top_user_id', null);
+				}
+			}
+
+			// Continue with leaderboard embed creation
 			const leaderboardEmbed = new EmbedBuilder()
-				.setColor('#FFD700') // Gold color
+				.setColor('#FFD700')
 				.setTitle(`🏆 Top 10 XP Leaders in ${interaction.guild.name}`)
 				.setTimestamp();
 

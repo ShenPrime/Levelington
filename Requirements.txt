@@ -21,6 +21,8 @@ Commands:
 1. /rank - Display current level and XP progress
 2. /leaderboard - Show top 10 users by XP
 3. /xp @user - Check another user's XP stats
+4. /assign_level - assigns user level manually and sets their xp to the minimum required for that level
+5. /delete_server_data - delete all schema's relating to the server in the database
 
 Technical Requirements:
 1. Use Discord.js library

@@ -3,7 +3,7 @@ const db = require('../db');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('setup')
+        .setName('setup_levelington')
         .setDescription('Sets up the XP bot for this server (Admin Only).')
         .addChannelOption(option =>
             option.setName('level_up_channel')

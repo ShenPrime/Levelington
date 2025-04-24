@@ -37,10 +37,6 @@ module.exports = {
             const progressNeeded = xpNeeded - xpForCurrentLevel;
 
             // Simple progress bar
-            const progressBarLength = 10;
-            const filledBlocks = Math.round((progressXp / progressNeeded) * progressBarLength);
-            const emptyBlocks = progressBarLength - filledBlocks;
-            const progressBar = '🟩'.repeat(filledBlocks) + '⬜'.repeat(emptyBlocks);
 
 			const xpEmbed = new EmbedBuilder()
 				.setColor('#0099ff')
@@ -49,7 +45,6 @@ module.exports = {
 				.addFields(
 					{ name: 'Level', value: `**${currentLevel}**`, inline: true },
 					{ name: 'XP', value: `**${currentXp}** / ${xpNeeded}`, inline: true },
-                    { name: 'Progress', value: `${progressBar} (${progressXp}/${progressNeeded})` }
 				)
 				.setTimestamp();
 

@@ -65,20 +65,79 @@ client.on('interactionCreate', async interaction => {
 
 // Listen for messages (for XP gain)
 client.on('messageCreate', async message => {
+    // Debug logging for message filtering
+
+    
     // Ignore bot messages and empty messages
-    if (message.author.bot || !message.content || !message.guild) return;
+    //console.log(`[DEBUG] Full message object:`, message);
+    if (message.author.bot || !message.guild) {
+        //console.log(`[XP] Ignoring message - Bot: ${message.author.bot}, DM: ${!message.guild}`);
+        return;
+    }
+    
+    // Check for valid message content (including attachments, embeds, stickers)
+
+    
+    // Comprehensive message validation checking all possible content types
+    const hasValidContent = !message.author.bot && message.guild && 
+        (message.content?.trim().length > 0 || 
+         message.attachments.size > 0 || 
+         message.embeds.length > 0 || 
+         message.stickers.size > 0);
+    
+    if (!hasValidContent) {
+        console.log(`[XP] Ignoring message - Invalid content, system message or wrong type:`, {
+            content: message.content,
+            attachments: message.attachments.size,
+            embeds: message.embeds.length,
+            stickers: message.stickers.size,
+            components: message.components?.length || 0,
+            system: message.system,
+            type: message.type,
+            poll: message.poll !== null,
+            reference: message.reference !== null,
+            activity: message.activity !== null
+        });
+     
+        // Additional debug for empty messages
+        if (message.content === '') {
+            console.log('[DEBUG] Empty message content detected, checking for attachments/embeds/stickers:', {
+                hasAttachments: message.attachments.size > 0,
+                hasEmbeds: message.embeds.length > 0,
+                hasStickers: message.stickers.size > 0
+            });
+        }
+        return;
+    }
+    
+    // Debug log full message structure for analysis
+
+    
+    // Log XP processing decision
+
+    
+    // Additional validation check for non-empty strings
+    //if (message.content?.trim() && message.content.trim().length > 0) {
+        //console.log('[XP] Valid message content detected:', message.content.trim());
+    //}
 
     const userId = message.author.id;
     const guildId = message.guild.id;
     const now = Date.now();
-    const cooldownAmount = COOLDOWN_SECONDS * 1000;
+    const cooldownAmount = COOLDOWN_SECONDS;
 
     try {
         // Check if guild is set up
         const guildSettings = await db.getGuildSettings(guildId);
+        
+        // Check if channel is ignored
+        if (guildSettings?.ignored_channels?.split(',').includes(message.channel.id)) {
+            console.log(`[XP] Ignoring message in ignored channel ${message.channel.id}`);
+            return;
+        }
+
         if (!guildSettings) {
-            // Maybe log this or inform an admin, but don't process XP
-            // console.log(`Guild ${guildId} not set up. Ignoring message.`);
+            console.log(`[XP] Guild ${guildId} not set up. Ignoring message from ${message.author.tag}`);
             return;
         }
 
@@ -89,21 +148,27 @@ client.on('messageCreate', async message => {
         if (userData && userData.last_message_timestamp) {
             const expirationTime = parseInt(userData.last_message_timestamp, 10) + cooldownAmount;
             if (now < expirationTime) {
-                // Still on cooldown
-                // const timeLeft = (expirationTime - now) / 1000;
-                // console.log(`${message.author.tag} is on cooldown for ${timeLeft.toFixed(1)} more seconds.`);
+                const timeLeft = (expirationTime - now) / 1000;
+                console.log(`[XP] ${message.author.tag} is on cooldown for ${timeLeft.toFixed(1)} more seconds`);
                 return;
             }
         }
 
         // Award XP (15-25)
-        const xpToAward = Math.floor(Math.random() * (25 - 15 + 1)) + 15;
-        // console.log(`Awarding ${xpToAward} XP to ${message.author.tag} in guild ${guildId}`); // Less verbose logging
+        let xpToAward = Math.floor(Math.random() * (25 - 15 + 1)) + 15;
+            // Apply channel multiplier
+            const multipliers = guildSettings.channel_multipliers ? JSON.parse(guildSettings.channel_multipliers) : {};
+            const channelMultiplier = multipliers[message.channel.id] || 1.0;
+            xpToAward = Math.round(xpToAward * channelMultiplier);
+            console.log(`[XP] Applied ${channelMultiplier}x multiplier - Awarding ${xpToAward} XP`);
+        console.log(`[XP] Awarding ${xpToAward} XP to ${message.author.tag} in guild ${guildId}`);
+        //console.log(`Awarding ${xpToAward} XP to ${message.author.tag} in guild ${guildId}`); // Less verbose logging
 
         // Update user in DB (passing guildId)
         const updatedUser = await db.updateUser(userId, guildId, xpToAward, now);
-
+        
         if (updatedUser) {
+            console.log(`[XP] Successfully updated XP for ${message.author.tag} in guild ${guildId}`);
             const currentLevel = updatedUser.level;
             const currentXp = updatedUser.xp;
             const xpNeeded = xpForLevel(currentLevel + 1);
@@ -139,7 +204,8 @@ client.on('messageCreate', async message => {
                 }
             }
         } else {
-             console.error(`Failed to update user ${userId} in guild ${guildId}`);
+             console.error(`[XP] Failed to update user ${userId} in guild ${guildId}. Possible database issue or guild not properly set up.`);
+             console.error(`[XP] Check if schema 'guild_${guildId}' and tables exist in the database.`);
         }
 
     } catch (error) {

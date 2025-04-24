@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const db = require('../db');
+const { xpForLevel } = require('../utils');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -44,7 +45,8 @@ module.exports = {
                 return interaction.editReply({ content: 'The XP bot has not been set up for this server yet. Use `/setup` first.', ephemeral: true });
             }
 
-            const success = await db.setUserLevel(targetUser.id, guildId, targetLevel);
+            const xpValue = xpForLevel(targetLevel);
+const success = await db.setUserLevel(targetUser.id, guildId, targetLevel, xpValue);
 
             if (success) {
                 const successEmbed = new EmbedBuilder()
