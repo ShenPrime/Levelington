@@ -149,7 +149,7 @@ client.on('messageCreate', async message => {
             const expirationTime = parseInt(userData.last_message_timestamp, 10) + cooldownAmount;
             if (now < expirationTime) {
                 const timeLeft = (expirationTime - now) / 1000;
-                console.log(`[XP] ${message.author.tag} is on cooldown for ${timeLeft.toFixed(1)} more seconds`);
+                //console.log(`[XP] ${message.author.tag} is on cooldown for ${timeLeft.toFixed(1)} more seconds`);
                 return;
             }
         }
