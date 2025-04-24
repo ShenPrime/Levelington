@@ -124,7 +124,7 @@ client.on('messageCreate', async message => {
     const userId = message.author.id;
     const guildId = message.guild.id;
     const now = Date.now();
-    const cooldownAmount = COOLDOWN_SECONDS;
+    const cooldownAmount = COOLDOWN_SECONDS * 1000;
 
     try {
         // Check if guild is set up
