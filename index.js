@@ -6,7 +6,7 @@ const fs = require('node:fs'); // Added fs
 const path = require('node:path'); // Added path
 // const { token } = require('./config.json'); // Removed config.json require
 const db = require('./db'); // Import database functions
-const { xpForLevel } = require('./utils'); // Import utility function
+const { xpForLevel, updateBiggestYapperRole } = require('./utils'); // Import utility functions
 
 // Create a new client instance
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -178,6 +178,9 @@ client.on('messageCreate', async message => {
                 const newLevel = currentLevel + 1;
                 await db.updateUserLevel(userId, guildId, newLevel); // Pass guildId
                 console.log(`${message.author.tag} in guild ${guildId} leveled up to level ${newLevel}!`);
+
+                // Update the "Biggest Yapper" role after level up
+                await updateBiggestYapperRole(message.guild, db);
 
                 // Send level up notification using configured channel
                 const levelUpChannelId = guildSettings.level_up_channel_id;
