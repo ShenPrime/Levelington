@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionsBitField } = require('discord.js');
 const db = require('../db');
+const { updateBiggestYapperRole } = require('../utils');
 
 module.exports = {
 	data: new SlashCommandBuilder()
