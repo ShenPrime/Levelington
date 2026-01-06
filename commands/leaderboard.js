@@ -10,11 +10,14 @@ module.exports = {
 		const guildId = interaction.guild.id;
 
 		try {
+			// Defer reply immediately to avoid timeout
+			await interaction.deferReply();
+
 			// Fetch more users than needed to account for users who may have left
 			const topUsers = await db.getLeaderboard(guildId, 50);
 
 			if (topUsers.length === 0) {
-				return interaction.reply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', ephemeral: true });
+				return interaction.editReply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', flags: 64 });
 			}
 
 			// Use the shared utility to update the Biggest Yapper role
@@ -46,19 +49,19 @@ module.exports = {
             }
 
             if (validCount === 0) {
-                return interaction.reply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', ephemeral: true });
+                return interaction.editReply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', flags: 64 });
             }
 
             leaderboardEmbed.setDescription(description);
 
-			await interaction.reply({ embeds: [leaderboardEmbed] });
+			await interaction.editReply({ embeds: [leaderboardEmbed] });
 		} catch (error) {
 			console.error(`Error executing leaderboard command for guild ${guildId}:`, error);
             // Check if the error is due to the guild not being set up
             if (error.message.includes('does not exist') || error.code === '42P01') {
-                 await interaction.reply({ content: 'The leaderboard is not available. Please run the `/setup` command first.', ephemeral: true });
+                 await interaction.editReply({ content: 'The leaderboard is not available. Please run the `/setup` command first.', flags: 64 });
             } else {
-			    await interaction.reply({ content: 'There was an error trying to fetch the leaderboard.', ephemeral: true });
+			    await interaction.editReply({ content: 'There was an error trying to fetch the leaderboard.', flags: 64 });
             }
 		}
 	},
