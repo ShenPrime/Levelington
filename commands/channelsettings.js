@@ -6,18 +6,20 @@ module.exports = {
         .setName('channelsettings')
         .setDescription('Lists ignored channels and channels with XP multipliers in this server.'),
     async execute(interaction) {
-        const guildId = interaction.guild.id;
         const guild = interaction.guild;
-        const settings = await db.getGuildSettings(guildId);
-        if (!settings) {
-            return interaction.reply({ content: 'No settings found for this server. Please run /setup first.', ephemeral: true });
-        }
+        const guildId = guild.id;
 
-        // Ignored channels
-        let ignoredChannels = [];
-        if (settings.ignored_channels) {
-            ignoredChannels = settings.ignored_channels.split(',').filter(Boolean);
-        }
+        // Defer reply immediately to avoid timeout
+        await interaction.deferReply({ flags: 64 });
+
+        try {
+            const settings = await db.getGuildSettings(guildId);
+            
+            // Ignored channels
+            let ignoredChannels = [];
+            if (settings.ignored_channels) {
+                ignoredChannels = settings.ignored_channels.split(',').filter(Boolean);
+            }
 
         // Channel multipliers
         let channelMultipliers = {};
@@ -63,7 +65,7 @@ module.exports = {
                 // Find channels belonging to this category
                 const categoryChannels = individualChannels.filter(ch => ch.parentId === category.id);
                 categoryChannels.forEach(ch => {
-                    lines.push(`  └─ <#${ch.id}> (${ch.name})`);
+                    lines.push(`  └─ <#${ch.id}>`);
                 });
             });
             
@@ -74,7 +76,7 @@ module.exports = {
             
             if (orphanedChannels.length > 0) {
                 orphanedChannels.forEach(ch => {
-                    lines.push(`<#${ch.id}> (${ch.name})`);
+                    lines.push(`<#${ch.id}>`);
                 });
             }
             
@@ -116,7 +118,7 @@ module.exports = {
                     // Find channels belonging to this category
                     const categoryChannels = individualChannels.filter(ch => ch.parentId === category.id);
                     categoryChannels.forEach(ch => {
-                        lines.push(`  └─ <#${ch.id}> (${ch.name}): x${ch.multiplier}`);
+                        lines.push(`  └─ <#${ch.id}>: x${ch.multiplier}`);
                     });
                 });
                 
@@ -127,7 +129,7 @@ module.exports = {
                 
                 if (orphanedChannels.length > 0) {
                     orphanedChannels.forEach(ch => {
-                        lines.push(`<#${ch.id}> (${ch.name}): x${ch.multiplier}`);
+                        lines.push(`<#${ch.id}>: x${ch.multiplier}`);
                     });
                 }
                 
@@ -149,6 +151,16 @@ module.exports = {
             )
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], flags: 64 });
-    },
+        await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error fetching channel settings:', error);
+            
+            // Check if interaction has expired
+            if (interaction.replied || interaction.deferred) {
+                await interaction.editReply({ content: 'Failed to fetch channel settings.', flags: 64 });
+            } else {
+                await interaction.reply({ content: 'Failed to fetch channel settings.', flags: 64 });
+            }
+        }
+    }
 };
