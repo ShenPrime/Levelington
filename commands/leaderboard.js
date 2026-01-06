@@ -10,8 +10,8 @@ module.exports = {
 		const guildId = interaction.guild.id;
 
 		try {
-			// Fetch top 10 users using the new getLeaderboard function
-			const topUsers = await db.getLeaderboard(guildId, 10);
+			// Fetch more users than needed to account for users who may have left
+			const topUsers = await db.getLeaderboard(guildId, 50);
 
 			if (topUsers.length === 0) {
 				return interaction.reply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', ephemeral: true });
@@ -31,13 +31,22 @@ module.exports = {
             const memberPromises = topUsers.map(user => interaction.guild.members.fetch(user.user_id).catch(() => null));
             const members = await Promise.all(memberPromises);
 
-            for (let i = 0; i < topUsers.length; i++) {
+            // Filter to only include users still in the server
+            let validCount = 0;
+            for (let i = 0; i < topUsers.length && validCount < 10; i++) {
                 const user = topUsers[i];
-                const member = members[i]; // Get the fetched member (or null if failed/left)
+                const member = members[i];
 
-                const displayName = member ? member.displayName : `User (${user.user_id.substring(0, 6)}...)`; // Fallback display
-                const rank = i + 1;
-                description += `${rank}. **${displayName}** - Level ${user.level} (${user.xp} XP)\n`;
+                // Skip users who have left the server
+                if (!member) continue;
+
+                validCount++;
+                const displayName = member.displayName;
+                description += `${validCount}. **${displayName}** - Level ${user.level} (${user.xp} XP)\n`;
+            }
+
+            if (validCount === 0) {
+                return interaction.reply({ content: 'No one is on the leaderboard yet! Ensure the bot is set up using `/setup`.', ephemeral: true });
             }
 
             leaderboardEmbed.setDescription(description);
