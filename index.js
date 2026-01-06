@@ -37,10 +37,8 @@ const COOLDOWN_SECONDS = 30;
 // const xpForLevel = (level) => Math.floor(100 * Math.pow(level, 1.5));
 
 // When the client is ready, run this code (only once)
-client.once('ready', async () => {
+client.once('clientReady', async () => {
 	console.log(`Ready! Logged in as ${client.user.tag}`);
-    // Initialize the database (might need adjustment for per-guild schemas later)
-    // await db.initializeDB(); // Initialization might be handled by /setup now
 });
 
 // Listen for interactions (slash commands)
@@ -58,7 +56,23 @@ client.on('interactionCreate', async interaction => {
 		await command.execute(interaction);
 	} catch (error) {
 		console.error(error);
-		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+		
+		// Handle interaction timeout/expiry gracefully
+		if (error.code === 10062) { // Unknown interaction
+			console.log('Interaction expired or was not found');
+			return; // Don't try to respond to expired interaction
+		}
+		
+		// Try to respond, but handle if interaction has expired
+		try {
+			if (interaction.replied || interaction.deferred) {
+				await interaction.editReply({ content: 'There was an error while executing this command!', flags: 64 });
+			} else {
+				await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+			}
+		} catch (replyError) {
+			console.error('Failed to respond to interaction:', replyError);
+		}
 	}
 });
 
@@ -130,9 +144,19 @@ client.on('messageCreate', async message => {
         // Check if guild is set up
         const guildSettings = await db.getGuildSettings(guildId);
         
-        // Check if channel is ignored
-        if (guildSettings?.ignored_channels?.split(',').includes(message.channel.id)) {
-            console.log(`[XP] Ignoring message in ignored channel ${message.channel.id}`);
+        // Check if channel is ignored (directly or via parent category)
+        const ignoredChannels = guildSettings?.ignored_channels?.split(',').filter(id => id.trim() !== '') || [];
+        
+        let isChannelIgnored = ignoredChannels.includes(message.channel.id);
+        
+        // If channel is not directly ignored, check if its parent category is ignored
+        if (!isChannelIgnored && message.channel.parentId) {
+            isChannelIgnored = ignoredChannels.includes(message.channel.parentId);
+        }
+        
+        if (isChannelIgnored) {
+            const ignoreReason = ignoredChannels.includes(message.channel.id) ? 'directly ignored' : 'parent category ignored';
+            console.log(`[XP] Ignoring message in ${message.channel.id} (${ignoreReason})`);
             return;
         }
 
@@ -216,6 +240,137 @@ client.on('messageCreate', async message => {
     }
 });
 
+
+// Listen for channel creation to auto-ignore channels in ignored categories and apply category multipliers
+client.on('channelCreate', async channel => {
+    console.log(`[ChannelCreate] Channel created: ${channel.id} (${channel.name}), type: ${channel.type}, parentId: ${channel.parentId}`);
+    
+    if (!channel.guild || !channel.parentId) {
+        console.log(`[ChannelCreate] Skipping - no guild or parentId`);
+        return; // Only handle guild channels with parents
+    }
+    
+    const guildId = channel.guild.id;
+    const categoryId = channel.parentId;
+    
+    try {
+        const settings = await db.getGuildSettings(guildId);
+        console.log(`[ChannelCreate] Settings found:`, !!settings);
+        
+        if (!settings?.ignored_channels && !settings?.channel_multipliers) {
+            console.log(`[ChannelCreate] No ignored_channels or channel_multipliers found`);
+            return;
+        }
+        
+        let needsUpdate = false;
+        const ignoredChannels = settings.ignored_channels ? settings.ignored_channels.split(',').filter(id => id.trim() !== '') : [];
+        const multipliers = settings.channel_multipliers ? JSON.parse(settings.channel_multipliers) : {};
+        
+        console.log(`[ChannelCreate] Current multipliers:`, multipliers);
+        console.log(`[ChannelCreate] Checking if parent category ${categoryId} has multiplier:`, multipliers[categoryId]);
+        
+        // Check if parent category is ignored
+        if (ignoredChannels.includes(categoryId)) {
+            ignoredChannels.push(channel.id);
+            await db.setGuildSetting(guildId, 'ignored_channels', ignoredChannels.join(','));
+            console.log(`[Auto-Ignore] Added new channel ${channel.id} (${channel.name}) to ignore list (parent category ${categoryId} is ignored)`);
+            needsUpdate = true;
+        }
+        
+        // Check if parent category has multiplier
+        if (multipliers[categoryId]) {
+            multipliers[channel.id] = multipliers[categoryId];
+            await db.setGuildSetting(guildId, 'channel_multipliers', JSON.stringify(multipliers));
+            console.log(`[Auto-Multiplier] Applied ${multipliers[categoryId]}x multiplier to new channel ${channel.id} (${channel.name}) (parent category ${categoryId} has multiplier)`);
+            needsUpdate = true;
+        } else {
+            console.log(`[ChannelCreate] Parent category ${categoryId} has no multiplier`);
+        }
+        
+        if (!needsUpdate) {
+            console.log(`[ChannelCreate] No auto-update needed for channel ${channel.id} (${channel.name})`);
+        }
+    } catch (error) {
+        console.error(`[Auto-Update] Error handling channel creation:`, error);
+    }
+});
+
+// Listen for channel deletions to clean up settings
+client.on('channelDelete', async channel => {
+    if (!channel.guild) return; // Only handle guild channels
+    
+    const guildId = channel.guild.id;
+    const channelId = channel.id;
+    
+    try {
+        const settings = await db.getGuildSettings(guildId);
+        if (!settings) return;
+        
+        let updated = false;
+        
+        // Clean up ignored_channels
+        if (settings.ignored_channels) {
+            const ignoredChannels = settings.ignored_channels.split(',').filter(id => id.trim() !== '');
+            const originalLength = ignoredChannels.length;
+            
+            // Remove the deleted channel from ignored list
+            const filteredChannels = ignoredChannels.filter(id => id !== channelId);
+            
+            if (filteredChannels.length !== originalLength) {
+                await db.setGuildSetting(guildId, 'ignored_channels', filteredChannels.join(','));
+                console.log(`[Cleanup] Removed deleted channel ${channelId} from ignored_channels for guild ${guildId}`);
+                updated = true;
+            }
+        }
+        
+        // Clean up channel_multipliers
+        if (settings.channel_multipliers) {
+            const multipliers = JSON.parse(settings.channel_multipliers);
+            
+            if (multipliers[channelId]) {
+                delete multipliers[channelId];
+                await db.setGuildSetting(guildId, 'channel_multipliers', JSON.stringify(multipliers));
+                console.log(`[Cleanup] Removed deleted channel ${channelId} from channel_multipliers for guild ${guildId}`);
+                updated = true;
+            }
+        }
+        
+        // Clean up level_up_channel_id if it was the deleted channel
+        if (settings.level_up_channel_id === channelId) {
+            await db.setGuildSetting(guildId, 'level_up_channel_id', null);
+            console.log(`[Cleanup] Removed deleted channel ${channelId} from level_up_channel_id for guild ${guildId}`);
+            updated = true;
+        }
+        
+        if (!updated) {
+            console.log(`[Cleanup] No settings to clean up for deleted channel ${channelId} in guild ${guildId}`);
+        }
+        
+    } catch (error) {
+        console.error(`[Cleanup] Error cleaning up deleted channel ${channelId} in guild ${guildId}:`, error);
+    }
+});
+
+// Listen for guild deletions (bot leaves/kicked) to clean up data
+client.on('guildDelete', async guild => {
+    const guildId = guild.id;
+    
+    try {
+        console.log(`[Cleanup] Bot left guild ${guildId} (${guild.name}), cleaning up data...`);
+        
+        // Option 1: Delete the entire schema (more thorough cleanup)
+        const success = await db.deleteGuildSchema(guildId);
+        
+        if (success) {
+            console.log(`[Cleanup] Successfully deleted all data for guild ${guildId} (${guild.name})`);
+        } else {
+            console.error(`[Cleanup] Failed to delete data for guild ${guildId} (${guild.name})`);
+        }
+        
+    } catch (error) {
+        console.error(`[Cleanup] Error cleaning up guild ${guildId} (${guild.name}):`, error);
+    }
+});
 
 // Login to Discord with your client's token from .env
 client.login(process.env.DISCORD_TOKEN);

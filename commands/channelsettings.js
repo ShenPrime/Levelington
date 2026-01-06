@@ -32,20 +32,112 @@ module.exports = {
         // Format ignored channels
         let ignoredList = 'None';
         if (ignoredChannels.length > 0) {
-            ignoredList = ignoredChannels.map(id => {
+            // Separate categories and individual channels
+            const categories = [];
+            const individualChannels = [];
+            
+            ignoredChannels.forEach(id => {
                 const channel = guild.channels.cache.get(id);
-                return channel ? `<#${id}> (${channel.name})` : `Unknown (${id})`;
-            }).join('\n');
+                if (channel) {
+                    if (channel.type === 4) { // Category
+                        categories.push({
+                            id,
+                            name: channel.name,
+                            channels: []
+                        });
+                    } else { // Individual channel
+                        individualChannels.push({ id, name: channel.name, parentId: channel.parentId });
+                    }
+                } else {
+                    individualChannels.push({ id, name: `Unknown (${id})`, parentId: null });
+                }
+            });
+            
+            // Group individual channels under their categories
+            const lines = [];
+            
+            // Add categories first
+            categories.forEach(category => {
+                lines.push(`**${category.name}** (Category - All channels ignored)`);
+                
+                // Find channels belonging to this category
+                const categoryChannels = individualChannels.filter(ch => ch.parentId === category.id);
+                categoryChannels.forEach(ch => {
+                    lines.push(`  └─ <#${ch.id}> (${ch.name})`);
+                });
+            });
+            
+            // Add individual channels that don't belong to any listed category
+            const orphanedChannels = individualChannels.filter(ch => {
+                return !categories.some(cat => cat.id === ch.parentId);
+            });
+            
+            if (orphanedChannels.length > 0) {
+                orphanedChannels.forEach(ch => {
+                    lines.push(`<#${ch.id}> (${ch.name})`);
+                });
+            }
+            
+            ignoredList = lines.length > 0 ? lines.join('\n') : 'None';
         }
 
         // Format multipliers
         let multiplierList = 'None';
         const multiplierEntries = Object.entries(channelMultipliers);
         if (multiplierEntries.length > 0) {
-            multiplierList = multiplierEntries.map(([id, mult]) => {
-                const channel = guild.channels.cache.get(id);
-                return channel ? `<#${id}> (${channel.name}): x${mult}` : `Unknown (${id}): x${mult}`;
-            }).join('\n');
+            // Filter out default (1x) multipliers
+            const nonDefaultMultipliers = multiplierEntries.filter(([id, mult]) => mult !== 1);
+            
+            if (nonDefaultMultipliers.length > 0) {
+                // Separate categories and individual channels
+                const categories = [];
+                const individualChannels = [];
+                
+                nonDefaultMultipliers.forEach(([id, mult]) => {
+                    const channel = guild.channels.cache.get(id);
+                    if (channel) {
+                        if (channel.type === 4) { // Category
+                            categories.push({ id, name: channel.name, multiplier: mult });
+                        } else { // Individual channel
+                            individualChannels.push({ id, name: channel.name, parentId: channel.parentId, multiplier: mult });
+                        }
+                    } else {
+                        individualChannels.push({ id, name: `Unknown (${id})`, parentId: null, multiplier: mult });
+                    }
+                });
+                
+                // Group individual channels under their categories
+                const lines = [];
+                
+                // Add categories first
+                categories.forEach(category => {
+                    lines.push(`**${category.name}** (Category - ${category.multiplier}x multiplier for all channels)`);
+                    
+                    // Find channels belonging to this category
+                    const categoryChannels = individualChannels.filter(ch => ch.parentId === category.id);
+                    categoryChannels.forEach(ch => {
+                        lines.push(`  └─ <#${ch.id}> (${ch.name}): x${ch.multiplier}`);
+                    });
+                });
+                
+                // Add individual channels that don't belong to any listed category
+                const orphanedChannels = individualChannels.filter(ch => {
+                    return !categories.some(cat => cat.id === ch.parentId);
+                });
+                
+                if (orphanedChannels.length > 0) {
+                    orphanedChannels.forEach(ch => {
+                        lines.push(`<#${ch.id}> (${ch.name}): x${ch.multiplier}`);
+                    });
+                }
+                
+                lines.push('\n*All other channels have default 1x multiplier*');
+                multiplierList = lines.join('\n');
+            } else {
+                multiplierList = '*All channels have default 1x multiplier*';
+            }
+        } else {
+            multiplierList = '*All channels have default 1x multiplier*';
         }
 
         const embed = new EmbedBuilder()
@@ -57,6 +149,6 @@ module.exports = {
             )
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed], flags: 64 });
     },
 };
